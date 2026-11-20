@@ -521,6 +521,8 @@ public:
     // multiple-selection region, with regex + regex-calculate substitutions.
     enum SearchRegionStatus { SearchRegionNotReady, SearchRegionReady, SearchRegionImpliedAll };
     SearchRegionStatus getSearchRegionStatus();
+    void resolveSearchIndicator();   // npplnx-8pu.19 — allocator/probe slot
+    bool searchIndicatorResolved = false;
     void showSearchDialog();
     void searchCount(bool select, bool partial, bool before);
     void searchFind(bool postReplace = false);

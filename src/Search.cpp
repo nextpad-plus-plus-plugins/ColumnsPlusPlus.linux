@@ -721,8 +721,42 @@ void ColumnsPlusPlusData::searchReplaceAll(bool partial, bool before) {
                        : std::to_string((long long)spi.count) + " replacements made.");
 }
 
+// npplnx-8pu.19 — the search indicator was a persisted default of 18,
+// which collides with other allocator-era plugins' fallback (NppBeads)
+// and, on remapped-layout hosts, with nothing today but no guarantee
+// tomorrow. Resolve once per session: an explicitly forced user slot is
+// honoured when it is host-safe for the DETECTED layout (git-gutter
+// margin-mask probe, decision D2 — 0x1C = shipped layout, bits 15/16/17
+// = Windows-parity remap); otherwise allocator-first, then the persisted
+// value if host-safe, then 27 (unowned in both layouts).
+void ColumnsPlusPlusData::resolveSearchIndicator() {
+    if (searchIndicatorResolved) return;
+    searchIndicatorResolved = true;
+    intptr_t ggMask = send(SCI_GETMARGINMASKN, 3);
+    const bool remapped = (ggMask & 0x38000) != 0;
+    auto hostSafe = [remapped](int id) {
+        if (remapped) return (id >= 9 && id <= 20) || id == 27;
+        /* legacy host owns: smart 8, links 19, mark styles 21-25,
+         * incremental 28, spell 30, find-mark 31 */
+        return (id >= 9 && id <= 18) || id == 20 || id == 26 ||
+               id == 27 || id == 29;
+    };
+    if (searchData.forceUserIndicator && hostSafe(searchData.userIndicator)) {
+        searchData.indicator = searchData.customIndicator = searchData.userIndicator;
+        return;
+    }
+    int id = -1;
+    if (npp(NPPM_ALLOCATEINDICATOR, 1, (intptr_t)&id) && id > 0) {
+        searchData.indicator = searchData.customIndicator = id;
+        return;
+    }
+    if (!hostSafe(searchData.indicator))
+        searchData.indicator = searchData.customIndicator = 27;
+}
+
 void ColumnsPlusPlusData::showSearchDialog() {
     if (searchData.dialog) { focusSearchPanel(searchData.dialog); return; }
+    resolveSearchIndicator();
     if (searchData.enableCustomIndicator) {
         IndicSetStyle(searchData.customIndicator, INDIC_FULLBOX);
         IndicSetFore (searchData.customIndicator, searchData.customColor);
